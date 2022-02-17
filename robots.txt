@@ -1,0 +1,3 @@
+User-agent: *
+Disallow:
+Sitemap: https://wisekube.com/sitemap.xml
