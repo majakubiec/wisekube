@@ -1,6 +1,6 @@
 # Wisekube
 
-A kube: a cube with a k. Four walls and a safe place to think about tech, code and everything in between.
+A kube: a cube with a k. Six walls and a space to challenge and create. Tech, code and everything in between.
 
 Live at [blog.wisekube.com](https://blog.wisekube.com). Built with [Astro](https://astro.build) and Tailwind CSS, deployed to Cloudflare on every push to `main`.
 

@@ -1,6 +1,6 @@
 export const SITE = {
   name: 'Wisekube',
-  tagline: 'A kube: four walls and a safe place to think about tech, code and everything in between.',
+  tagline: 'A kube: six walls and a space to challenge and create. Tech, code and everything in between.',
   nav: [
     { label: 'Home', href: '/' },
     { label: 'Blog', href: '/blog/' },
