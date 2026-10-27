@@ -1,43 +1,52 @@
-# Astro Starter Kit: Minimal
+# Wisekube
 
-```sh
-npm create astro@latest -- --template minimal
+A kube: a cube with a k. Four walls and a safe place to think about tech, code and everything in between.
+
+Live at [blog.wisekube.com](https://blog.wisekube.com). Built with [Astro](https://astro.build) and Tailwind CSS, deployed to Cloudflare on every push to `main`.
+
+## Commands
+
+| Command           | What it does                                   |
+| :---------------- | :--------------------------------------------- |
+| `npm install`     | Install dependencies                           |
+| `npm run dev`     | Start the dev server at `localhost:4321`       |
+| `npm run build`   | Build the site into `dist/`                    |
+| `npm run preview` | Preview the built site                         |
+| `npm run deploy`  | Build and deploy with Wrangler (manual deploy) |
+
+## Writing a blog post
+
+Add a `.md` or `.mdx` file to `src/content/blog/`:
+
+```md
+---
+title: My post
+description: One sentence shown on cards and in link previews.
+pubDate: 2026-10-27
+category: Notes
+image: /og-default.png   # optional
+featured: true           # optional, pins it as the big card on /blog/
+draft: true              # optional, hides it from the live site
+---
+
+Post content.
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+Quote any frontmatter value that contains a colon.
 
-## 🚀 Project Structure
+## Adding a lab experiment
 
-Inside of your Astro project, you'll see the following folders and files:
+Put a standalone page at `public/lab/<name>/index.html`. It shows up in the `/lab/` gallery on the next build.
 
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
-```
+- **Title:** the page's `<title>`
+- **Description:** `<meta name="description" content="...">`
+- **Order:** `<meta name="date" content="YYYY-MM-DD">` (always set this; file dates are not reliable on the build server)
+- **Thumbnail:** `cover.png`, `.jpg` or `.webp` in the same folder, otherwise a live preview
+- Folders starting with `_` or `.` are skipped
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+## Where things live
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
-
-Any static assets, like images, can be placed in the `public/` directory.
-
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+- `src/lib/site.ts`: site name, tagline, navigation
+- `src/styles/global.css`: colors (light and dark), fonts, shared styles
+- `src/components/Footer.astro`: social links
+- `wrangler.jsonc`: Cloudflare deploy config and custom domain
