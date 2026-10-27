@@ -1,0 +1,912 @@
+<!doctype html><html lang="en"><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>xDS, Frame by Frame</title>
+<meta name="date" content="2026-10-27">
+<meta name="description" content="How an Envoy proxy learns its configuration while it runs. Scroll, and each diagram plays the next message on the wire.">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: scrollytelling book. Text steps on the left scroll past a sticky stage on the right; each step sets the stage's scene. Phones stack: sticky stage on top, steps below. */
+:root{
+  --paper:#F1EFF4; --panel:#FFFFFF; --ink:#1B1726; --muted:#625C74; --line:#CDC7D8; --wash:#E6E2EC;
+  --accent:#9B2C7F; --accent-wash:#F3E1EE; --cp:#2D55B0; --ack:#0F7D6B; --nack:#C2410C;
+  --f-display:"Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --f-body:"Source Serif 4", Georgia, "Times New Roman", serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#15121C; --panel:#1E1A28; --ink:#ECE8F3; --muted:#A39DB4; --line:#383244; --wash:#262131;
+  --accent:#E77FCB; --accent-wash:#3A2234; --cp:#8DA8F6; --ack:#52D1B4; --nack:#FB8C5E; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#15121C; --panel:#1E1A28; --ink:#ECE8F3; --muted:#A39DB4; --line:#383244; --wash:#262131;
+  --accent:#E77FCB; --accent-wash:#3A2234; --cp:#8DA8F6; --ack:#52D1B4; --nack:#FB8C5E; color-scheme:dark}
+
+body{background:var(--paper);color:var(--ink);font:400 18px/1.62 var(--f-body);
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px))}
+.wrap{max-width:1200px;margin:0 auto}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0}
+code,.mono{font-family:var(--f-mono);font-size:.84em}
+p{margin:0}
+a{color:var(--accent)}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+/* progress */
+.progress{position:fixed;inset:0 0 auto;padding-top:env(safe-area-inset-top,0px);z-index:20;pointer-events:none}
+.progress i{display:block;height:3px;background:var(--accent);transform-origin:left;transform:scaleX(0)}
+
+/* hero */
+.hero{padding-block:72px 40px;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:48px;align-items:end}
+.eyebrow{font:600 12px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.hero h1{font-size:clamp(44px,7.2vw,96px);font-weight:800;line-height:.95;letter-spacing:-.03em;margin-top:18px}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.lede{margin-top:22px;max-width:34rem;font-size:20px;color:var(--muted)}
+.toc{list-style:none;margin:0;padding:0;display:grid;gap:2px;border-top:1px solid var(--line)}
+.toc a{display:grid;grid-template-columns:2.4em 1fr auto;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line);
+  text-decoration:none;color:var(--ink);font:500 16px/1.3 var(--f-display)}
+.toc a span:first-child{font:400 12px/1.6 var(--f-mono);color:var(--muted)}
+.toc a span:last-child{font:400 11px/1.8 var(--f-mono);color:var(--muted)}
+.toc a:hover{color:var(--accent)}
+.hero-wire{grid-column:1/-1;margin-top:8px}
+.hero-wire svg{width:100%;height:auto;display:block}
+
+/* chapter */
+.chapter{display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:56px;padding-block:40px 0;border-top:1px solid var(--line)}
+.ch-head{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr;gap:6px 22px;align-items:baseline;padding-block:20px 0}
+.ch-num{font:800 clamp(56px,8vw,104px)/.8 var(--f-display);color:var(--accent);grid-row:span 2;letter-spacing:-.04em}
+.ch-head h2{font-size:clamp(28px,3.6vw,44px);font-weight:700;letter-spacing:-.015em}
+.ch-head p{color:var(--muted);max-width:40rem}
+.steps{min-width:0;padding-bottom:30vh}
+.step{min-height:78vh;display:flex;align-items:center}
+.step:first-child{min-height:60vh;align-items:flex-start;padding-top:12vh}
+.card{max-width:30rem;transition:opacity .4s ease}
+.step:not(.active) .card{opacity:.38}
+.card .k{font:600 11px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:10px}
+.card h3{font-size:24px;font-weight:700;margin-bottom:10px;letter-spacing:-.01em}
+.card p+p{margin-top:12px}
+.card code{background:var(--wash);padding:1px 5px;border-radius:4px}
+.card .note{font-size:15px;color:var(--muted);border-left:2px solid var(--line);padding-left:12px}
+
+.stage{position:sticky;top:calc(env(safe-area-inset-top,0px) + 5vh);height:90vh;align-self:start;min-width:0;
+  display:flex;flex-direction:column;gap:14px;justify-content:center}
+.stage svg{width:100%;height:auto;max-height:66vh;display:block;overflow:visible}
+.stage.solo svg{max-height:84vh}
+.scene-n{font:400 11px/1 var(--f-mono);color:var(--muted);letter-spacing:.08em}
+
+/* svg vocabulary */
+svg text{font-family:var(--f-mono);font-size:12.5px;fill:var(--ink)}
+svg .tl{font:700 16px var(--f-display);fill:var(--ink)}
+svg .tm{fill:var(--muted)}
+svg .ts{font-size:11px}
+svg .ta{fill:var(--accent)}
+svg .tc{fill:var(--cp)}
+svg .tok{fill:var(--ack)}
+svg .tbad{fill:var(--nack)}
+svg .mid{text-anchor:middle}
+svg .end{text-anchor:end}
+.bx{fill:var(--panel);stroke:var(--line);stroke-width:1.5}
+.bx.cp{stroke:var(--cp)}
+.bx.env{stroke:var(--accent)}
+.bx.bad{stroke:var(--nack);stroke-dasharray:6 5;fill:none}
+.chip{fill:var(--wash);stroke:none}
+.chip.acc{fill:var(--accent-wash);stroke:var(--accent);stroke-width:1.2}
+.tagbg{fill:var(--accent)}
+.tagt{font:600 11px var(--f-mono)!important;fill:var(--panel)!important;text-anchor:middle}
+.life{stroke:var(--line);stroke-width:1.5;stroke-dasharray:4 6}
+.lnk{stroke:var(--muted);stroke-width:1.5;fill:none}
+.lnk.dash{stroke-dasharray:5 5}
+.ar{fill:none;stroke-width:2;stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .9s cubic-bezier(.5,0,.2,1)}
+.on .ar,.ar.on{stroke-dashoffset:0}
+.ar.req{stroke:var(--cp)}
+.ar.res{stroke:var(--accent)}
+.ar.bad{stroke:var(--nack)}
+.ar.wire{stroke:var(--line);stroke-width:2.5}
+.ar.fat{stroke:var(--accent);stroke-width:5}
+.mk-req{fill:var(--cp)} .mk-res{fill:var(--accent)} .mk-mut{fill:var(--muted)} .mk-bad{fill:var(--nack)}
+.pkt{fill:var(--accent)} .pkt.up{fill:var(--cp)}
+
+/* scene states */
+.f{opacity:.13;transition:opacity .5s ease}
+.h{opacity:0;transition:opacity .5s ease}
+.f.on,.h.on{opacity:1}
+.seq .msg.on:not(.hl){opacity:.42}
+g.hl > rect.bx{stroke:var(--accent);stroke-width:2.6}
+tspan.ref{transition:fill .3s}
+tspan.ref.hl{fill:var(--accent);font-weight:600}
+
+/* wire cards */
+.cards{display:grid}
+.cards > *{grid-area:1/1}
+.wire{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+  font:400 12.5px/1.65 var(--f-mono);color:var(--ink);overflow-x:auto;white-space:pre}
+.wire .hd{font-weight:600;color:var(--ink)}
+.wire .dir{color:var(--muted)}
+.wire b{color:var(--accent);font-weight:600}
+.wire i{color:var(--muted);font-style:normal}
+.wire .ok{color:var(--ack);font-weight:600}
+.wire .bad{color:var(--nack);font-weight:600}
+
+/* code stage */
+.code{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:80vh}
+.code .bar{display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line);font:400 11.5px var(--f-mono);color:var(--muted);position:sticky;top:0;background:var(--panel)}
+.code ol{margin:0;padding:10px 0;list-style:none;counter-reset:l;font:400 12.5px/1.75 var(--f-mono)}
+.code li{counter-increment:l;white-space:pre;padding:0 16px 0 0;transition:background .35s, opacity .35s;opacity:.45}
+.code li::before{content:counter(l);display:inline-block;width:2.6em;padding-right:1em;text-align:right;color:var(--muted)}
+.code li.hl{background:var(--accent-wash);opacity:1}
+.code li.hl::before{color:var(--accent)}
+.code .key{color:var(--cp)}
+.code .val{color:var(--accent)}
+
+/* animations */
+@keyframes lite{0%,15%{fill:var(--wash);stroke:var(--line)}35%,100%{fill:var(--accent-wash);stroke:var(--accent)}}
+.pipe .stg{fill:var(--wash);stroke:var(--line);stroke-width:1.5}
+.on .pipe .stg{animation:lite 3.2s ease both}
+.on .pipe .stg.d1{animation-delay:.6s}.on .pipe .stg.d2{animation-delay:1.2s}.on .pipe .stg.d3{animation-delay:1.8s}
+@keyframes fill{0%{transform:scaleX(0)}70%,100%{transform:scaleX(1)}}
+.bar-fill{fill:var(--accent);transform-box:fill-box;transform-origin:left;transform:scaleX(.35)}
+.on .bar-fill{animation:fill 3.4s ease-in-out infinite}
+.on .bar-fill.slow{animation-duration:4.4s}
+
+/* field notes */
+.notes{border-top:1px solid var(--line);padding-block:64px 80px;display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:56px}
+.notes h2{font-size:clamp(28px,3.6vw,44px);font-weight:700}
+.models{list-style:none;margin:22px 0 0;padding:0;display:grid;gap:16px}
+.models li{padding-left:16px;border-left:3px solid var(--accent)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+td:first-child{font:700 15px var(--f-display);color:var(--accent);white-space:nowrap}
+td code{font-size:12px;word-break:break-all}
+tr:last-child td{border-bottom:0}
+footer{padding-block:0 60px;color:var(--muted);font-size:15px}
+
+@media (max-width:860px){
+  body{font-size:17px}
+  .hero{grid-template-columns:1fr;padding-block:48px 24px;gap:28px}
+  .chapter{grid-template-columns:1fr;gap:0}
+  .stage{order:-1;top:env(safe-area-inset-top,0px);height:auto;max-height:56vh;z-index:3;background:var(--paper);
+    padding-block:10px 12px;border-bottom:1px solid var(--line);justify-content:flex-start}
+  .ch-head{order:-2}
+  .stage svg{max-height:34vh}
+  .stage.solo svg{max-height:46vh}
+  .wire{font-size:10.5px;padding:10px 12px;line-height:1.55}
+  .code{max-height:44vh}
+  .code ol{font-size:11px}
+  .step{min-height:62vh}
+  .step:first-child{min-height:50vh;padding-top:6vh}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .notes{grid-template-columns:1fr;gap:28px}
+}
+@media (prefers-reduced-motion: reduce){
+  *{transition:none!important;animation:none!important}
+  .pkt,.mover{display:none}
+}
+</style>
+
+<div class="progress" aria-hidden="true"><i id="prog"></i></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <marker id="m-req" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mk-req"/></marker>
+    <marker id="m-res" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mk-res"/></marker>
+    <marker id="m-mut" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mk-mut"/></marker>
+    <marker id="m-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mk-bad"/></marker>
+  </defs>
+</svg>
+
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <span class="eyebrow">Envoy · data plane API · v3</span>
+    <h1>xDS, frame<br>by <em>frame</em></h1>
+    <p class="lede">How an Envoy proxy learns its configuration while it runs. Scroll, and each diagram plays the next message on the wire.</p>
+  </div>
+  <ol class="toc">
+    <li><a href="#c1"><span>01</span><span>Two planes</span><span>who talks</span></a></li>
+    <li><a href="#c2"><span>02</span><span>The resource graph</span><span>LDS → EDS</span></a></li>
+    <li><a href="#c3"><span>03</span><span>Bootstrap</span><span>first contact</span></a></li>
+    <li><a href="#c4"><span>04</span><span>ACK</span><span>version + nonce</span></a></li>
+    <li><a href="#c5"><span>05</span><span>NACK</span><span>error_detail</span></a></li>
+    <li><a href="#c6"><span>06</span><span>Subscriptions</span><span>stale nonces</span></a></li>
+    <li><a href="#c7"><span>07</span><span>Four ways to stream</span><span>SotW · Delta · ADS</span></a></li>
+    <li><a href="#c8"><span>08</span><span>Ordering and warming</span><span>make before break</span></a></li>
+  </ol>
+  <div class="hero-wire" aria-hidden="true">
+    <svg viewBox="0 0 1000 110">
+      <rect class="bx env" x="2" y="22" width="150" height="66" rx="10"/>
+      <text class="tl mid" x="77" y="61">Envoy</text>
+      <rect class="bx cp" x="848" y="22" width="150" height="66" rx="10"/>
+      <text class="tl mid" x="923" y="52">xDS server</text>
+      <text class="tm mid ts" x="923" y="72">control plane</text>
+      <path class="lnk dash" d="M152 44 H848"/><path class="lnk dash" d="M848 68 H152"/>
+      <g class="mover"><rect x="-70" y="33" width="140" height="22" rx="11" class="chip acc" style="stroke:var(--cp);fill:var(--panel)"/><text class="mid ts tc" x="0" y="48">DiscoveryRequest</text>
+        <animateMotion dur="3.2s" repeatCount="indefinite" path="M230 0 H770"/></g>
+      <g class="mover"><rect x="-74" y="57" width="148" height="22" rx="11" class="chip acc"/><text class="mid ts ta" x="0" y="72">DiscoveryResponse</text>
+        <animateMotion dur="3.2s" begin="1.6s" repeatCount="indefinite" path="M770 0 H230"/></g>
+    </svg>
+  </div>
+</header>
+
+<!-- ============ 01 ============ -->
+<section class="chapter" id="c1">
+  <div class="ch-head"><span class="ch-num">01</span><h2>Two planes</h2><p>Envoy moves bytes. Something else decides where they go.</p></div>
+  <div class="steps">
+    <div class="step" data-s="1"><div class="card"><span class="k">static config</span><h3>An Envoy on its own</h3>
+      <p>Every Envoy starts from a bootstrap file. You can list every listener and cluster in it under <code>static_resources</code>, and for one proxy that works fine.</p>
+      <p>For a fleet it doesn't. Each change means editing files on many machines and restarting or hot-restarting each process.</p></div></div>
+    <div class="step" data-s="2"><div class="card"><span class="k">control plane</span><h3>Enter the management server</h3>
+      <p>xDS splits the system in two. The proxies form the <em>data plane</em>. A separate process, the <em>management server</em>, holds the configuration you want them to run.</p>
+      <p class="note">Istio's istiod, Envoy Gateway, Gloo, and anything built on go-control-plane or java-control-plane all play this role.</p></div></div>
+    <div class="step" data-s="3"><div class="card"><span class="k">transport</span><h3>Configuration arrives on a stream</h3>
+      <p>Each Envoy opens a long-lived, bidirectional gRPC stream to the server. Envoy sends requests up; the server sends configuration down, and keeps sending it whenever something changes.</p>
+      <p>Nothing restarts. Listeners, routes, and clusters are swapped in while traffic flows.</p>
+      <p class="note">gRPC is the main transport. REST-JSON polling and watching files on disk use the same resource types.</p></div></div>
+    <div class="step" data-s="4"><div class="card"><span class="k">node identity</span><h3>Every request says who is asking</h3>
+      <p>Requests carry a <code>node</code> with an <code>id</code> and a <code>cluster</code>. The server uses them to pick which configuration that proxy receives.</p>
+      <p>Two proxies on the same server can see completely different worlds. In go-control-plane this is literally a map from node ID to a <em>snapshot</em>.</p></div></div>
+  </div>
+  <div class="stage solo" aria-label="Diagram: Envoy proxies and a management server">
+    <svg viewBox="0 0 600 470">
+      <g class="h" data-on="2+">
+        <rect class="bx cp" x="150" y="20" width="300" height="96" rx="14"/>
+        <text class="tl mid" x="300" y="60">Management server</text>
+        <text class="tm mid ts" x="300" y="84">control plane · gRPC :18000</text>
+      </g>
+      <g class="h" data-on="4">
+        <rect class="chip" x="120" y="128" width="360" height="30" rx="8"/>
+        <text class="mid ts" x="300" y="148"><tspan class="tc">web-*</tspan> → snapshot A    <tspan class="tc">pay-*</tspan> → snapshot B</text>
+      </g>
+      <g class="h" data-on="3+">
+        <path class="ar wire" pathLength="1" d="M100 330 C100 230 300 220 300 116"/>
+        <path class="ar wire" pathLength="1" d="M300 330 L300 162"/>
+        <path class="ar wire" pathLength="1" d="M500 330 C500 230 300 220 300 116"/>
+        <circle class="pkt" r="5"><animateMotion dur="2.2s" repeatCount="indefinite" path="M300 116 C300 220 100 230 100 330"/></circle>
+        <circle class="pkt" r="5"><animateMotion dur="2.2s" begin=".7s" repeatCount="indefinite" path="M300 162 L300 330"/></circle>
+        <circle class="pkt" r="5"><animateMotion dur="2.2s" begin="1.4s" repeatCount="indefinite" path="M300 116 C300 220 500 230 500 330"/></circle>
+        <circle class="pkt up" r="3.5"><animateMotion dur="3s" begin=".3s" repeatCount="indefinite" path="M100 330 C100 230 300 220 300 116"/></circle>
+        <circle class="pkt up" r="3.5"><animateMotion dur="3s" begin="1.9s" repeatCount="indefinite" path="M500 330 C500 230 300 220 300 116"/></circle>
+        <text class="tm ts" x="404" y="246">bidirectional</text>
+        <text class="tm ts" x="404" y="262">gRPC stream</text>
+      </g>
+      <g class="h" data-on="1">
+        <text class="mid tbad" x="300" y="190">change = edit file + restart × N</text>
+      </g>
+      <g>
+        <g class="h" data-on="1"><rect x="62" y="262" width="76" height="44" rx="6" class="bx bad" style="stroke:var(--muted)"/><text class="mid ts tm" x="100" y="289">static.yaml</text></g>
+        <rect class="bx env" x="25" y="330" width="150" height="110" rx="12"/>
+        <text class="tl mid" x="100" y="364">Envoy</text><text class="tm mid ts" x="100" y="384">data plane</text>
+        <g class="h" data-on="4"><text class="mid ts" x="100" y="408">id <tspan class="ta">web-1</tspan></text><text class="mid ts tm" x="100" y="425">cluster web</text></g>
+      </g>
+      <g>
+        <g class="h" data-on="1"><rect x="262" y="262" width="76" height="44" rx="6" class="bx bad" style="stroke:var(--muted)"/><text class="mid ts tm" x="300" y="289">static.yaml</text></g>
+        <rect class="bx env" x="225" y="330" width="150" height="110" rx="12"/>
+        <text class="tl mid" x="300" y="364">Envoy</text><text class="tm mid ts" x="300" y="384">data plane</text>
+        <g class="h" data-on="4"><text class="mid ts" x="300" y="408">id <tspan class="ta">web-2</tspan></text><text class="mid ts tm" x="300" y="425">cluster web</text></g>
+      </g>
+      <g>
+        <g class="h" data-on="1"><rect x="462" y="262" width="76" height="44" rx="6" class="bx bad" style="stroke:var(--muted)"/><text class="mid ts tm" x="500" y="289">static.yaml</text></g>
+        <rect class="bx env" x="425" y="330" width="150" height="110" rx="12"/>
+        <text class="tl mid" x="500" y="364">Envoy</text><text class="tm mid ts" x="500" y="384">data plane</text>
+        <g class="h" data-on="4"><text class="mid ts" x="500" y="408">id <tspan class="ta">pay-1</tspan></text><text class="mid ts tm" x="500" y="425">cluster payments</text></g>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section class="chapter" id="c2">
+  <div class="ch-head"><span class="ch-num">02</span><h2>The resource graph</h2><p>Each "DS" serves one kind of resource. Together they describe one request's path through the proxy.</p></div>
+  <div class="steps">
+    <div class="step" data-s="1"><div class="card"><span class="k">LDS · Listener</span><h3>Where traffic enters</h3>
+      <p>A <code>Listener</code> binds an address and port and holds filter chains. For HTTP, the important filter is the <code>http_connection_manager</code>.</p>
+      <p>The connection manager can embed its routes, or name a route table to fetch: <code>rds.route_config_name</code>.</p></div></div>
+    <div class="step" data-s="2"><div class="card"><span class="k">RDS · RouteConfiguration</span><h3>Where a request should go</h3>
+      <p>A <code>RouteConfiguration</code> groups virtual hosts, matched by the Host header. Each virtual host has ordered routes: match a path, headers, or method, then send to a cluster.</p>
+      <p>Routes change far more often than listeners, which is why they live in a separate resource.</p></div></div>
+    <div class="step" data-s="3"><div class="card"><span class="k">CDS · Cluster</span><h3>A named group of upstream hosts</h3>
+      <p>A <code>Cluster</code> carries everything about talking to a backend: load balancing policy, timeouts, circuit breakers, health checks, outlier detection, TLS.</p>
+      <p>With <code>type: EDS</code>, it doesn't list its hosts. It asks for them.</p></div></div>
+    <div class="step" data-s="4"><div class="card"><span class="k">EDS · ClusterLoadAssignment</span><h3>The actual IP addresses</h3>
+      <p>A <code>ClusterLoadAssignment</code> lists endpoints grouped by locality, with weights, priorities, and health status.</p>
+      <p>Endpoints churn constantly as pods come and go. Keeping them separate means a scale-up never touches cluster settings.</p></div></div>
+    <div class="step" data-s="5"><div class="card"><span class="k">SDS · Secret</span><h3>Certificates, delivered on their own</h3>
+      <p>TLS contexts can point to a <code>Secret</code> by name instead of embedding keys. Certificates rotate without rewriting listeners or clusters, and private keys stay out of the main config.</p></div></div>
+    <div class="step" data-s="6"><div class="card"><span class="k">references</span><h3>Every arrow is a name</h3>
+      <p>Resources point at each other by string. The highlighted names are the glue: a listener names a route table, a route names a cluster, a cluster names its endpoints and secret.</p>
+      <p>A name can be referenced before its resource exists. Chapter 8 is about what happens then.</p>
+      <p class="note">Less common types follow the same pattern: SRDS for scoped routes, VHDS for virtual hosts on demand, RTDS for runtime, ECDS for individual filter configs.</p></div></div>
+  </div>
+  <div class="stage solo" aria-label="Diagram: Listener, RouteConfiguration, Cluster, ClusterLoadAssignment, Secret">
+    <svg viewBox="0 0 600 600">
+      <g class="f" data-on="1+" data-hl="1">
+        <rect class="bx" x="40" y="20" width="360" height="112" rx="12"/>
+        <rect class="tagbg" x="344" y="32" width="44" height="20" rx="10"/><text class="tagt" x="366" y="46">LDS</text>
+        <text class="tl" x="60" y="52">Listener</text>
+        <text x="60" y="76">ingress_http · 0.0.0.0:8080</text>
+        <text class="tm" x="60" y="98">→ http_connection_manager</text>
+        <text x="60" y="120">rds.route_config_name: <tspan class="ref" data-hl="6">ingress_routes</tspan></text>
+      </g>
+      <g class="h" data-on="2+"><path class="ar res" pathLength="1" d="M220 132 V164" marker-end="url(#m-res)"/></g>
+      <g class="f" data-on="2+" data-hl="2">
+        <rect class="bx" x="40" y="166" width="360" height="136" rx="12"/>
+        <rect class="tagbg" x="344" y="178" width="44" height="20" rx="10"/><text class="tagt" x="366" y="192">RDS</text>
+        <text class="tl" x="60" y="198">RouteConfiguration</text>
+        <text x="60" y="222">name: <tspan class="ref" data-hl="6">ingress_routes</tspan></text>
+        <text class="tm" x="60" y="244">virtual_host api.example.com</text>
+        <text x="60" y="266">/users  → cluster: <tspan class="ref" data-hl="6">users</tspan></text>
+        <text x="60" y="288">/orders → cluster: orders</text>
+      </g>
+      <g class="h" data-on="3+"><path class="ar res" pathLength="1" d="M220 302 V336" marker-end="url(#m-res)"/></g>
+      <g class="f" data-on="3+" data-hl="3">
+        <rect class="bx" x="40" y="338" width="360" height="112" rx="12"/>
+        <rect class="tagbg" x="344" y="350" width="44" height="20" rx="10"/><text class="tagt" x="366" y="364">CDS</text>
+        <text class="tl" x="60" y="370">Cluster</text>
+        <text x="60" y="394">name: <tspan class="ref" data-hl="6">users</tspan> · type: EDS</text>
+        <text class="tm" x="60" y="416">eds_cluster_config: { ads }</text>
+        <text x="60" y="438">tls sds: <tspan class="ref" data-hl="6">users-mtls</tspan></text>
+      </g>
+      <g class="h" data-on="4+"><path class="ar res" pathLength="1" d="M220 450 V484" marker-end="url(#m-res)"/></g>
+      <g class="f" data-on="4+" data-hl="4">
+        <rect class="bx" x="40" y="486" width="360" height="104" rx="12"/>
+        <rect class="tagbg" x="344" y="498" width="44" height="20" rx="10"/><text class="tagt" x="366" y="512">EDS</text>
+        <text class="tl" x="60" y="518">ClusterLoadAssignment</text>
+        <text x="60" y="542">cluster_name: <tspan class="ref" data-hl="6">users</tspan></text>
+        <rect class="chip" x="60" y="554" width="140" height="24" rx="12"/><text class="mid ts" x="130" y="570">10.0.4.11:9000</text>
+        <rect class="chip" x="210" y="554" width="140" height="24" rx="12"/><text class="mid ts" x="280" y="570">10.0.4.12:9000</text>
+      </g>
+      <g class="h" data-on="5+">
+        <path class="ar res" pathLength="1" d="M400 430 C462 430 505 412 505 366" marker-end="url(#m-res)"/>
+        <text class="tm ts" x="420" y="455">upstream TLS</text>
+        <path class="lnk dash" d="M400 76 C470 76 505 150 505 246" marker-end="url(#m-mut)"/>
+        <text class="tm ts mid" x="505" y="64">downstream TLS</text>
+      </g>
+      <g class="f" data-on="5+" data-hl="5">
+        <rect class="bx" x="430" y="250" width="150" height="112" rx="12"/>
+        <rect class="tagbg" x="526" y="260" width="44" height="20" rx="10"/><text class="tagt" x="548" y="274">SDS</text>
+        <text class="tl" x="446" y="296">Secret</text>
+        <text x="446" y="318"><tspan class="ref" data-hl="6">users-mtls</tspan></text>
+        <text class="tm ts" x="446" y="336">tls_certificate</text>
+        <text class="tm ts" x="446" y="352">validation_context</text>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section class="chapter" id="c3">
+  <div class="ch-head"><span class="ch-num">03</span><h2>Bootstrap</h2><p>The one file Envoy still needs. It says who this proxy is and how to reach the server.</p></div>
+  <div class="steps">
+    <div class="step" data-s="1"><div class="card"><span class="k">node</span><h3>Identity first</h3>
+      <p><code>node.id</code> and <code>node.cluster</code> are copied into the first request on every stream. If the server keys snapshots by node ID and you get this wrong, the proxy connects fine and receives nothing.</p>
+      <p class="note">Both can also be set with the <code>--service-node</code> and <code>--service-cluster</code> flags.</p></div></div>
+    <div class="step" data-s="2"><div class="card"><span class="k">static_resources</span><h3>The chicken-and-egg cluster</h3>
+      <p>Envoy can't fetch clusters until it knows how to reach the server, and reaching the server needs a cluster. So exactly one cluster stays static: <code>xds_cluster</code>.</p>
+      <p>gRPC runs over HTTP/2, so that cluster must enable <code>http2_protocol_options</code>. Forgetting it is the most common reason a fresh setup never connects.</p></div></div>
+    <div class="step" data-s="3"><div class="card"><span class="k">ads_config</span><h3>One stream for everything</h3>
+      <p><code>ads_config</code> sets up the Aggregated Discovery Service: a single gRPC stream that carries every resource type. Chapter 7 covers why most deployments choose it.</p></div></div>
+    <div class="step" data-s="4"><div class="card"><span class="k">lds_config · cds_config</span><h3>Only two roots</h3>
+      <p>The bootstrap names only listeners and clusters as dynamic. <code>ads: {}</code> means "fetch them over the ADS stream."</p>
+      <p>Routes, endpoints, and secrets never appear here. Envoy discovers them because listeners and clusters reference them, which is the graph from chapter 2.</p></div></div>
+  </div>
+  <div class="stage" aria-label="Annotated bootstrap.yaml">
+    <div class="code">
+      <div class="bar"><span>bootstrap.yaml</span><span>envoy -c bootstrap.yaml</span></div>
+      <ol>
+<li data-hl="1"><span class="key">node</span>:</li>
+<li data-hl="1">  <span class="key">id</span>: <span class="val">web-1</span></li>
+<li data-hl="1">  <span class="key">cluster</span>: <span class="val">web</span></li>
+<li data-hl="3"><span class="key">dynamic_resources</span>:</li>
+<li data-hl="3">  <span class="key">ads_config</span>:</li>
+<li data-hl="3">    <span class="key">api_type</span>: <span class="val">GRPC</span></li>
+<li data-hl="3">    <span class="key">transport_api_version</span>: <span class="val">V3</span></li>
+<li data-hl="3">    <span class="key">grpc_services</span>:</li>
+<li data-hl="3">    - <span class="key">envoy_grpc</span>:</li>
+<li data-hl="3">        <span class="key">cluster_name</span>: <span class="val">xds_cluster</span></li>
+<li data-hl="4">  <span class="key">lds_config</span>:</li>
+<li data-hl="4">    <span class="key">ads</span>: <span class="val">{}</span></li>
+<li data-hl="4">    <span class="key">resource_api_version</span>: <span class="val">V3</span></li>
+<li data-hl="4">  <span class="key">cds_config</span>:</li>
+<li data-hl="4">    <span class="key">ads</span>: <span class="val">{}</span></li>
+<li data-hl="4">    <span class="key">resource_api_version</span>: <span class="val">V3</span></li>
+<li data-hl="2"><span class="key">static_resources</span>:</li>
+<li data-hl="2">  <span class="key">clusters</span>:</li>
+<li data-hl="2">  - <span class="key">name</span>: <span class="val">xds_cluster</span></li>
+<li data-hl="2">    <span class="key">type</span>: <span class="val">STRICT_DNS</span></li>
+<li data-hl="2">    <span class="key">typed_extension_protocol_options</span>:</li>
+<li data-hl="2">      <span class="key">envoy.extensions.upstreams.http.v3.HttpProtocolOptions</span>:</li>
+<li data-hl="2">        <span class="key">"@type"</span>: <span class="val">type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions</span></li>
+<li data-hl="2">        <span class="key">explicit_http_config</span>:</li>
+<li data-hl="2">          <span class="key">http2_protocol_options</span>: <span class="val">{}</span></li>
+<li data-hl="2">    <span class="key">load_assignment</span>:</li>
+<li data-hl="2">      <span class="key">cluster_name</span>: <span class="val">xds_cluster</span></li>
+<li data-hl="2">      <span class="key">endpoints</span>:</li>
+<li data-hl="2">      - <span class="key">lb_endpoints</span>:</li>
+<li data-hl="2">        - <span class="key">endpoint</span>: { <span class="key">address</span>: { <span class="key">socket_address</span>: { <span class="key">address</span>: <span class="val">xds.internal</span>, <span class="key">port_value</span>: <span class="val">18000</span> }}}</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section class="chapter" id="c4">
+  <div class="ch-head"><span class="ch-num">04</span><h2>ACK: a conversation</h2><p>State-of-the-world xDS on a CDS stream. Two fields carry the whole protocol: <code>version_info</code> and the nonce.</p></div>
+  <div class="steps">
+    <div class="step" data-s="1"><div class="card"><span class="k">first request</span><h3>Envoy asks with empty hands</h3>
+      <p>The first <code>DiscoveryRequest</code> has an empty <code>version_info</code> and an empty <code>response_nonce</code>: "I have nothing, and I'm not answering anything."</p>
+      <p>An empty <code>resource_names</code> on a Cluster stream is a wildcard: send every cluster meant for this node.</p></div></div>
+    <div class="step" data-s="2"><div class="card"><span class="k">response</span><h3>The server answers with a version and a nonce</h3>
+      <p>The <code>DiscoveryResponse</code> carries the resources, a <code>version_info</code> naming this state, and a <code>nonce</code> naming this particular message.</p>
+      <p>The version describes the content. The nonce only identifies the message, so a reply can point at it.</p></div></div>
+    <div class="step" data-s="3"><div class="card"><span class="k">ACK</span><h3>Envoy acknowledges</h3>
+      <p>Envoy validates and applies the clusters, then sends a new request with <code>version_info: "v1"</code> and <code>response_nonce: "n1"</code>.</p>
+      <p>Read the pair as a sentence: "I'm answering message n1, and I now run v1." Since the reported version matches the one sent, this is an ACK.</p></div></div>
+    <div class="step" data-s="4"><div class="card"><span class="k">push</span><h3>Config changes, server pushes</h3>
+      <p>Someone adds a <code>payments</code> cluster. The server sends v2 with nonce n2. It sends <em>all three</em> clusters, because in state-of-the-world mode each Cluster response is the complete list.</p></div></div>
+    <div class="step" data-s="5"><div class="card"><span class="k">the open request</span><h3>Every ACK is also the next question</h3>
+      <p>Envoy ACKs v2. That request now sits at the server with nothing to answer it. The server holds it until the config changes, then responds.</p>
+      <p>There is no separate "subscribe" or "poll" call. The request in flight is the subscription.</p></div></div>
+  </div>
+  <div class="stage" aria-label="Sequence diagram: request, response, ACK">
+    <svg viewBox="0 0 600 400" class="seq">
+      <rect class="bx env" x="40" y="8" width="140" height="42" rx="10"/><text class="tl mid" x="110" y="35">Envoy</text>
+      <rect class="bx cp" x="420" y="8" width="140" height="42" rx="10"/><text class="tl mid" x="490" y="35">Server</text>
+      <path class="life" d="M110 50 V392"/><path class="life" d="M490 50 V392"/>
+      <g class="msg h" data-on="1+" data-hl="1"><path class="ar req" pathLength="1" d="M114 96 H484" marker-end="url(#m-req)"/>
+        <text class="mid tc" x="300" y="86">Request · version "" · nonce ""</text></g>
+      <g class="msg h" data-on="2+" data-hl="2"><path class="ar res" pathLength="1" d="M486 156 H116" marker-end="url(#m-res)"/>
+        <text class="mid ta" x="300" y="146">Response · v1 · nonce n1</text>
+        <text class="mid tm ts" x="300" y="172">users, orders</text></g>
+      <g class="msg h" data-on="3+" data-hl="3"><path class="ar req" pathLength="1" d="M114 216 H484" marker-end="url(#m-req)"/>
+        <text class="mid tc" x="300" y="206">Request · v1 · nonce n1</text>
+        <text class="mid tok ts" x="300" y="232">ACK</text></g>
+      <g class="h" data-on="3+"><text class="end tok ts" x="102" y="160">applied v1</text></g>
+      <g class="msg h" data-on="4+" data-hl="4"><path class="ar res" pathLength="1" d="M486 276 H116" marker-end="url(#m-res)"/>
+        <text class="mid ta" x="300" y="266">Response · v2 · nonce n2</text>
+        <text class="mid tm ts" x="300" y="292">users, orders, payments</text></g>
+      <g class="msg h" data-on="5+" data-hl="5"><path class="ar req" pathLength="1" d="M114 336 H484" marker-end="url(#m-req)"/>
+        <text class="mid tc" x="300" y="326">Request · v2 · nonce n2</text>
+        <text class="mid tok ts" x="300" y="352">ACK</text></g>
+      <g class="h" data-on="5"><text class="end tok ts" x="102" y="280">applied v2</text>
+        <rect x="496" y="326" width="96" height="44" rx="8" class="chip acc"/>
+        <text class="mid ts ta" x="544" y="344">held open</text><text class="mid ts tm" x="544" y="360">until change</text>
+        <circle class="pkt" r="4" cx="490" cy="336"><animate attributeName="r" values="3;7;3" dur="1.6s" repeatCount="indefinite"/></circle></g>
+    </svg>
+    <div class="cards">
+<pre class="wire h" data-on="1"><span class="hd">DiscoveryRequest</span>  <span class="dir">Envoy → server</span>
+version_info:   <b>""</b>
+node:           { id: "web-1", cluster: "web" }
+resource_names: []        <i># wildcard on a Cluster stream</i>
+type_url:       "type.googleapis.com/envoy.config.cluster.v3.Cluster"
+response_nonce: <b>""</b></pre>
+<pre class="wire h" data-on="2"><span class="hd">DiscoveryResponse</span>  <span class="dir">server → Envoy</span>
+version_info: <b>"v1"</b>
+resources:    [ Cluster "users", Cluster "orders" ]
+type_url:     "type.googleapis.com/envoy.config.cluster.v3.Cluster"
+nonce:        <b>"n1"</b></pre>
+<pre class="wire h" data-on="3"><span class="hd">DiscoveryRequest</span>  <span class="ok">ACK</span>
+version_info:   <b>"v1"</b>    <i># the state I now run</i>
+response_nonce: <b>"n1"</b>    <i># the message I'm answering</i>
+resource_names: []
+type_url:       "…envoy.config.cluster.v3.Cluster"
+error_detail:   <i>(unset)  # unset = accepted</i></pre>
+<pre class="wire h" data-on="4"><span class="hd">DiscoveryResponse</span>  <span class="dir">server → Envoy</span>
+version_info: <b>"v2"</b>
+resources:    [ "users", "orders", <b>"payments"</b> ]
+              <i># the full list: omitted clusters would be deleted</i>
+nonce:        <b>"n2"</b></pre>
+<pre class="wire h" data-on="5"><span class="hd">DiscoveryRequest</span>  <span class="ok">ACK</span>
+version_info:   <b>"v2"</b>
+response_nonce: <b>"n2"</b>
+<i># this request stays pending at the server
+# its arrival means: "send me the next change"</i></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section class="chapter" id="c5">
+  <div class="ch-head"><span class="ch-num">05</span><h2>NACK: saying no</h2><p>A rejection uses the same message as an ACK. The difference is in which version Envoy reports.</p></div>
+  <div class="steps">
+    <div class="step" data-s="1"><div class="card"><span class="k">bad push</span><h3>The server sends something invalid</h3>
+      <p>Envoy is running v2. The server pushes v3, where the <code>payments</code> cluster has <code>connect_timeout: 0s</code>. The proto requires a timeout greater than zero, so validation fails.</p></div></div>
+    <div class="step" data-s="2"><div class="card"><span class="k">NACK</span><h3>Envoy answers the nonce, keeps the old version</h3>
+      <p>The reply carries <code>response_nonce: "n3"</code>, because it is answering message n3. But <code>version_info</code> stays <code>"v2"</code>, the last version it accepted, and <code>error_detail</code> explains why.</p>
+      <p>Traffic keeps flowing on the old configuration. The invalid cluster never takes effect.</p></div></div>
+    <div class="step" data-s="3"><div class="card"><span class="k">server side</span><h3>Don't retry the same mistake</h3>
+      <p>The NACK is also the next pending request. A server should not answer it by resending v3; it would be rejected again in a loop.</p>
+      <p>Good control planes surface the <code>error_detail</code> to an operator and wait for the configuration to change.</p></div></div>
+    <div class="step" data-s="4"><div class="card"><span class="k">recovery</span><h3>A fix arrives as a new version</h3>
+      <p>The cluster is corrected. The server sends v4 with nonce n4. Envoy applies it and ACKs: <code>version_info: "v4"</code>, <code>response_nonce: "n4"</code>, no error.</p>
+      <p class="note">Rule of thumb: <code>version_info</code> equal to the response's version means ACK. A <code>version_info</code> that is older, plus an <code>error_detail</code>, means NACK.</p></div></div>
+  </div>
+  <div class="stage" aria-label="Sequence diagram: NACK and recovery">
+    <svg viewBox="0 0 600 400" class="seq">
+      <rect class="bx env" x="40" y="8" width="140" height="42" rx="10"/><text class="tl mid" x="110" y="35">Envoy</text>
+      <rect class="bx cp" x="420" y="8" width="140" height="42" rx="10"/><text class="tl mid" x="490" y="35">Server</text>
+      <path class="life" d="M110 50 V392"/><path class="life" d="M490 50 V392"/>
+      <text class="end ts tok" x="102" y="74">running v2</text>
+      <g class="msg h" data-on="1+" data-hl="1"><path class="ar res" pathLength="1" d="M486 106 H116" marker-end="url(#m-res)"/>
+        <text class="mid ta" x="300" y="96">Response · v3 · nonce n3</text>
+        <text class="mid tbad ts" x="300" y="122">payments: connect_timeout 0s</text></g>
+      <g class="h" data-on="1+"><path d="M98 96 l24 20 M122 96 l-24 20" stroke="var(--nack)" stroke-width="3"/></g>
+      <g class="msg h" data-on="2+" data-hl="2"><path class="ar bad" pathLength="1" d="M114 176 H484" marker-end="url(#m-bad)"/>
+        <text class="mid tbad" x="300" y="166">Request · v2 · nonce n3 · error</text>
+        <text class="mid tbad ts" x="300" y="192">NACK</text></g>
+      <g class="h" data-on="2+"><text class="end ts tok" x="102" y="180">still v2</text></g>
+      <g class="h" data-on="3"><rect x="200" y="214" width="200" height="40" rx="8" class="chip"/>
+        <text class="mid ts tm" x="300" y="231">server waits · no resend of v3</text>
+        <text class="mid ts tm" x="300" y="246">operator sees error_detail</text></g>
+      <g class="msg h" data-on="4+" data-hl="4"><path class="ar res" pathLength="1" d="M486 286 H116" marker-end="url(#m-res)"/>
+        <text class="mid ta" x="300" y="276">Response · v4 · nonce n4</text>
+        <text class="mid tm ts" x="300" y="302">connect_timeout 1s</text></g>
+      <g class="msg h" data-on="4+" data-hl="4"><path class="ar req" pathLength="1" d="M114 350 H484" marker-end="url(#m-req)"/>
+        <text class="mid tc" x="300" y="340">Request · v4 · nonce n4</text>
+        <text class="mid tok ts" x="300" y="366">ACK</text></g>
+      <g class="h" data-on="4"><text class="end ts tok" x="102" y="320">running v4</text></g>
+    </svg>
+    <div class="cards">
+<pre class="wire h" data-on="1"><span class="hd">DiscoveryResponse</span>  <span class="dir">server → Envoy</span>
+version_info: <b>"v3"</b>
+resources:    [ "users", "orders", "payments" ]
+              <i># payments.connect_timeout = 0s</i>
+nonce:        <b>"n3"</b></pre>
+<pre class="wire h" data-on="2-3"><span class="hd">DiscoveryRequest</span>  <span class="bad">NACK</span>
+version_info:   <b>"v2"</b>    <i># last version I accepted</i>
+response_nonce: <b>"n3"</b>    <i># the message I'm rejecting</i>
+type_url:       "…envoy.config.cluster.v3.Cluster"
+error_detail:
+  code:    <span class="bad">3</span>          <i># INVALID_ARGUMENT</i>
+  message: <span class="bad">"Proto constraint validation failed
+            (ClusterValidationError.ConnectTimeout:
+             value must be greater than 0s)"</span></pre>
+<pre class="wire h" data-on="4"><span class="hd">DiscoveryRequest</span>  <span class="ok">ACK</span>
+version_info:   <b>"v4"</b>
+response_nonce: <b>"n4"</b>
+error_detail:   <i>(unset)</i></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 ============ -->
+<section class="chapter" id="c6">
+  <div class="ch-head"><span class="ch-num">06</span><h2>Subscriptions and stale nonces</h2><p>Endpoints are requested by name. When the names change while a response is already in flight, the nonce sorts it out.</p></div>
+  <div class="steps">
+    <div class="step" data-s="1"><div class="card"><span class="k">named resources</span><h3>EDS asks for specific names</h3>
+      <p>Listener and Cluster streams are <em>wildcard</em>: Envoy wants all of them. Route and endpoint streams are <em>named</em>: Envoy lists exactly what it needs in <code>resource_names</code>.</p>
+      <p>Here Envoy knows one EDS cluster, so it asks for <code>["users"]</code>.</p></div></div>
+    <div class="step" data-s="2"><div class="card"><span class="k">response + ACK</span><h3>The usual exchange</h3>
+      <p>The server sends the <code>users</code> endpoints at v7 with nonce n5. Envoy ACKs and repeats its subscription. In state-of-the-world mode, every request carries the full list of names Envoy wants.</p></div></div>
+    <div class="step" data-s="3"><div class="card"><span class="k">crossing messages</span><h3>Both sides talk at once</h3>
+      <p>CDS just delivered a new cluster, <code>orders</code>. Envoy sends a request subscribing to <code>["users", "orders"]</code>, still referencing nonce n5.</p>
+      <p>At the same moment the server pushes a new <code>users</code> endpoint list as v8, nonce n6. The two messages cross on the wire.</p></div></div>
+    <div class="step" data-s="4"><div class="card"><span class="k">stale nonce</span><h3>The server ignores the old reply</h3>
+      <p>When Envoy's request arrives, the server has already sent n6. A request that answers n5 is <em>stale</em>, and the spec says the server should not respond to it.</p>
+      <p>Without this rule, the server could act on Envoy's view from before n6 arrived.</p></div></div>
+    <div class="step" data-s="5"><div class="card"><span class="k">converge</span><h3>The latest request wins</h3>
+      <p>Envoy ACKs n6, and since every request repeats the whole subscription, that ACK still asks for <code>orders</code>. Nothing was lost. The server answers with v9: both clusters' endpoints.</p></div></div>
+  </div>
+  <div class="stage" aria-label="Sequence diagram: stale nonce">
+    <svg viewBox="0 0 600 450" class="seq">
+      <rect class="bx env" x="40" y="8" width="140" height="42" rx="10"/><text class="tl mid" x="110" y="35">Envoy</text>
+      <rect class="bx cp" x="420" y="8" width="140" height="42" rx="10"/><text class="tl mid" x="490" y="35">Server</text>
+      <path class="life" d="M110 50 V442"/><path class="life" d="M490 50 V442"/>
+      <g class="msg h" data-on="1+" data-hl="1"><path class="ar req" pathLength="1" d="M114 90 H484" marker-end="url(#m-req)"/>
+        <text class="mid tc" x="300" y="80">EDS Request · names [users]</text></g>
+      <g class="msg h" data-on="2+" data-hl="2"><path class="ar res" pathLength="1" d="M486 140 H116" marker-end="url(#m-res)"/>
+        <text class="mid ta" x="300" y="130">Response · v7 · n5 · users</text></g>
+      <g class="msg h" data-on="2+" data-hl="2"><path class="ar req" pathLength="1" d="M114 190 H484" marker-end="url(#m-req)"/>
+        <text class="mid tc" x="300" y="180">ACK · v7 · n5 · [users]</text></g>
+      <g class="msg h" data-on="3+" data-hl="3-4"><path class="ar req" pathLength="1" d="M114 240 L484 312" marker-end="url(#m-req)"/>
+        <text class="tc ts" x="130" y="232">n5 · [users, orders]</text></g>
+      <g class="msg h" data-on="3+" data-hl="3"><path class="ar res" pathLength="1" d="M486 240 L116 312" marker-end="url(#m-res)"/>
+        <text class="ta ts end" x="470" y="232">v8 · n6 · users</text></g>
+      <g class="h" data-on="4+"><path d="M476 304 l20 18 M496 304 l-20 18" stroke="var(--nack)" stroke-width="3"/>
+        <text class="ts tbad" x="400" y="342">stale: n6 already sent</text></g>
+      <g class="msg h" data-on="5" data-hl="5"><path class="ar req" pathLength="1" d="M114 374 H484" marker-end="url(#m-req)"/>
+        <text class="mid tc" x="300" y="366">ACK · v8 · n6 · [users, orders]</text></g>
+      <g class="msg h" data-on="5" data-hl="5"><path class="ar res" pathLength="1" d="M486 420 H116" marker-end="url(#m-res)"/>
+        <text class="mid ta" x="300" y="410">Response · v9 · n7 · users, orders</text></g>
+    </svg>
+    <div class="cards">
+<pre class="wire h" data-on="1"><span class="hd">DiscoveryRequest</span>  <span class="dir">EDS, first</span>
+version_info:   ""
+resource_names: [ <b>"users"</b> ]   <i># named, not wildcard</i>
+type_url:       "…envoy.config.endpoint.v3.ClusterLoadAssignment"
+response_nonce: ""</pre>
+<pre class="wire h" data-on="2"><span class="hd">DiscoveryRequest</span>  <span class="ok">ACK</span>
+version_info:   "v7"
+response_nonce: "n5"
+resource_names: [ <b>"users"</b> ]   <i># repeated every time</i></pre>
+<pre class="wire h" data-on="3"><span class="dir">Envoy → server</span>               <span class="dir">server → Envoy</span>
+response_nonce: <b>"n5"</b>            version_info: "v8"
+resource_names: [ "users",       nonce:        <b>"n6"</b>
+                  <b>"orders"</b> ]</pre>
+<pre class="wire h" data-on="4"><i># server's view when the n5 request lands</i>
+last nonce sent:   <b>"n6"</b>
+request answers:   <span class="bad">"n5"</span>   → stale, no response
+<i># Envoy will answer n6 soon, with its current names</i></pre>
+<pre class="wire h" data-on="5"><span class="hd">DiscoveryRequest</span>  <span class="ok">ACK</span>
+version_info:   "v8"
+response_nonce: <b>"n6"</b>
+resource_names: [ "users", <b>"orders"</b> ]   <i># subscription survived</i></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section class="chapter" id="c7">
+  <div class="ch-head"><span class="ch-num">07</span><h2>Four ways to stream</h2><p>Two independent choices: how many streams, and whether each response carries everything or only changes.</p></div>
+  <div class="steps">
+    <div class="step" data-s="1"><div class="card"><span class="k">separate streams</span><h3>One stream per type</h3>
+      <p>Each resource type gets its own gRPC service and method: <code>StreamListeners</code>, <code>StreamRoutes</code>, <code>StreamClusters</code>, <code>StreamEndpoints</code>. They can even point at different servers.</p>
+      <p>The cost: nothing orders updates across streams. A route can arrive before the cluster it names.</p></div></div>
+    <div class="step" data-s="2"><div class="card"><span class="k">ADS</span><h3>Everything on one stream</h3>
+      <p>The Aggregated Discovery Service multiplexes all types over <code>StreamAggregatedResources</code>, distinguished by <code>type_url</code>. One server sees every request and chooses the order of every response.</p>
+      <p>That ordering control is why Istio and most production control planes use ADS.</p></div></div>
+    <div class="step" data-s="3"><div class="card"><span class="k">state of the world</span><h3>SotW: send the whole set</h3>
+      <p>In the original variant, a Listener or Cluster response lists every resource. Change one cluster out of 5,000 and the server sends 5,000.</p>
+      <p>Deletion is implicit. If a cluster is missing from the list, Envoy removes it.</p></div></div>
+    <div class="step" data-s="4"><div class="card"><span class="k">incremental</span><h3>Delta: send only what changed</h3>
+      <p>Delta xDS (<code>DeltaDiscoveryRequest</code>) carries only changed resources, each with its own version, plus an explicit <code>removed_resources</code> list.</p>
+      <p>Subscriptions change by difference too: <code>resource_names_subscribe</code> and <code>resource_names_unsubscribe</code>. On reconnect, <code>initial_resource_versions</code> tells the server what Envoy already has.</p></div></div>
+    <div class="step" data-s="5"><div class="card"><span class="k">the grid</span><h3>Pick one cell</h3>
+      <p>The two choices combine into four gRPC methods per type. The ACK and NACK rules from chapters 4 and 5 hold in all of them.</p>
+      <p class="note">Large meshes increasingly run Delta + ADS: one ordered stream and small payloads. VHDS, for virtual hosts loaded on demand, is only available in delta mode.</p></div></div>
+  </div>
+  <div class="stage" aria-label="Diagram: separate streams, ADS, SotW, Delta">
+    <svg viewBox="0 0 600 400">
+      <g class="h" data-on="1-4">
+        <rect class="bx env" x="20" y="140" width="120" height="120" rx="12"/><text class="tl mid" x="80" y="205">Envoy</text>
+        <rect class="bx cp" x="460" y="140" width="120" height="120" rx="12"/><text class="tl mid" x="520" y="205">Server</text>
+      </g>
+      <g class="h" data-on="1">
+        <path class="ar wire" pathLength="1" d="M140 160 H460"/><path class="ar wire" pathLength="1" d="M140 190 H460"/>
+        <path class="ar wire" pathLength="1" d="M140 220 H460"/><path class="ar wire" pathLength="1" d="M140 250 H460"/>
+        <text class="ts tm" x="160" y="154">LDS</text><text class="ts tm" x="160" y="184">RDS</text><text class="ts tm" x="160" y="214">CDS</text><text class="ts tm" x="160" y="244">EDS</text>
+        <circle class="pkt" r="4"><animateMotion dur="2.6s" repeatCount="indefinite" path="M460 160 H140"/></circle>
+        <circle class="pkt" r="4"><animateMotion dur="1.7s" repeatCount="indefinite" path="M460 190 H140"/></circle>
+        <circle class="pkt" r="4"><animateMotion dur="3.1s" repeatCount="indefinite" path="M460 220 H140"/></circle>
+        <circle class="pkt" r="4"><animateMotion dur="2.1s" repeatCount="indefinite" path="M460 250 H140"/></circle>
+        <text class="mid tm" x="300" y="100">4 streams · independent timing</text>
+      </g>
+      <g class="h" data-on="2">
+        <path class="ar fat" pathLength="1" d="M140 205 H460"/>
+        <text class="mid" x="300" y="100">1 stream · StreamAggregatedResources</text>
+        <text class="mid tm ts" x="300" y="300">the server decides the order</text>
+        <g><rect x="-20" y="-11" width="40" height="22" rx="6" style="fill:var(--panel);stroke:var(--accent)"/><text class="mid ts ta" x="0" y="4">CDS</text>
+          <animateMotion dur="4s" repeatCount="indefinite" path="M440 205 H160"/></g>
+        <g><rect x="-20" y="-11" width="40" height="22" rx="6" style="fill:var(--panel);stroke:var(--accent)"/><text class="mid ts ta" x="0" y="4">EDS</text>
+          <animateMotion dur="4s" begin="1s" repeatCount="indefinite" path="M440 205 H160"/></g>
+        <g><rect x="-20" y="-11" width="40" height="22" rx="6" style="fill:var(--panel);stroke:var(--accent)"/><text class="mid ts ta" x="0" y="4">LDS</text>
+          <animateMotion dur="4s" begin="2s" repeatCount="indefinite" path="M440 205 H160"/></g>
+        <g><rect x="-20" y="-11" width="40" height="22" rx="6" style="fill:var(--panel);stroke:var(--accent)"/><text class="mid ts ta" x="0" y="4">RDS</text>
+          <animateMotion dur="4s" begin="3s" repeatCount="indefinite" path="M440 205 H160"/></g>
+      </g>
+      <g class="h" data-on="3">
+        <path class="lnk dash" d="M140 200 H460"/>
+        <g><animateTransform attributeName="transform" type="translate" values="70 0; -70 0" dur="3s" repeatCount="indefinite"/>
+          <rect class="bx" x="235" y="122" width="130" height="160" rx="10"/>
+          <rect class="chip" x="247" y="134" width="106" height="22" rx="6"/><text class="ts" x="257" y="149">users</text>
+          <rect class="chip acc" x="247" y="162" width="106" height="22" rx="6"/><text class="ts ta" x="257" y="177">orders ★</text>
+          <rect class="chip" x="247" y="190" width="106" height="22" rx="6"/><text class="ts" x="257" y="205">payments</text>
+          <rect class="chip" x="247" y="218" width="106" height="22" rx="6"/><text class="ts" x="257" y="233">search</text>
+          <rect class="chip" x="247" y="246" width="106" height="22" rx="6"/><text class="ts" x="257" y="261">cart</text>
+        </g>
+        <text class="mid" x="300" y="324">SotW: all 5 clusters, every time</text>
+        <text class="mid tm ts" x="300" y="346">missing from the list = deleted (LDS, CDS)</text>
+      </g>
+      <g class="h" data-on="4">
+        <path class="lnk dash" d="M140 200 H460"/>
+        <g><animateTransform attributeName="transform" type="translate" values="70 0; -70 0" dur="3s" repeatCount="indefinite"/>
+          <rect class="bx" x="235" y="160" width="130" height="80" rx="10"/>
+          <rect class="chip acc" x="247" y="172" width="106" height="22" rx="6"/><text class="ts ta" x="257" y="187">orders · v14</text>
+          <text class="ts tbad" x="249" y="224">removed: cart</text>
+        </g>
+        <text class="mid" x="300" y="324">Delta: the change, plus removals</text>
+        <text class="mid tm ts" x="300" y="346">each resource carries its own version</text>
+      </g>
+      <g class="h" data-on="5">
+        <text class="tl mid" x="260" y="80">Separate</text><text class="tl mid" x="470" y="80">Aggregated (ADS)</text>
+        <text class="tl" x="10" y="160">SotW</text><text class="tl" x="10" y="275">Delta</text>
+        <rect class="bx" x="160" y="100" width="200" height="100" rx="10"/>
+        <text class="ts" x="176" y="134">StreamListeners</text><text class="ts" x="176" y="154">StreamClusters</text><text class="ts tm" x="176" y="174">StreamRoutes …</text>
+        <rect class="bx" x="370" y="100" width="200" height="100" rx="10"/>
+        <text class="ts" x="386" y="144">StreamAggregated</text><text class="ts" x="386" y="164">Resources</text>
+        <rect class="bx" x="160" y="215" width="200" height="100" rx="10"/>
+        <text class="ts" x="176" y="249">DeltaListeners</text><text class="ts" x="176" y="269">DeltaClusters</text><text class="ts tm" x="176" y="289">DeltaRoutes …</text>
+        <g class="hl"><rect class="bx" x="370" y="215" width="200" height="100" rx="10"/>
+        <text class="ts ta" x="386" y="259">DeltaAggregated</text><text class="ts ta" x="386" y="279">Resources</text></g>
+        <text class="mid tm ts" x="365" y="350">same ACK / NACK semantics in every cell</text>
+      </g>
+    </svg>
+    <div class="cards">
+<pre class="wire h" data-on="1-2"><span class="hd">type_url</span> <span class="dir">tells resources apart on a shared stream</span>
+…envoy.config.listener.v3.Listener
+…envoy.config.route.v3.RouteConfiguration
+…envoy.config.cluster.v3.Cluster
+…envoy.config.endpoint.v3.ClusterLoadAssignment</pre>
+<pre class="wire h" data-on="3"><span class="hd">DiscoveryResponse</span>  <span class="dir">SotW, Cluster</span>
+version_info: "v14"           <i># one version for the whole set</i>
+resources:    [ users, <b>orders</b>, payments, search, cart ]
+nonce:        "n9"</pre>
+<pre class="wire h" data-on="4"><span class="hd">DeltaDiscoveryResponse</span>  <span class="dir">server → Envoy</span>
+system_version_info: "v14"   <i># informational only</i>
+resources:
+  - name: <b>"orders"</b>  version: <b>"14"</b>  resource: { … }
+removed_resources: [ <span class="bad">"cart"</span> ]
+nonce: "d9"
+
+<span class="hd">DeltaDiscoveryRequest</span>  <span class="ok">ACK</span>
+response_nonce: "d9"        <i># no version_info field;</i>
+                             <i># error_detail unset = ACK</i></pre>
+<pre class="wire h" data-on="5"><i># gRPC services, one per type, two methods each</i>
+ClusterDiscoveryService.<b>StreamClusters</b>   <i># SotW</i>
+ClusterDiscoveryService.<b>DeltaClusters</b>    <i># Delta</i>
+AggregatedDiscoveryService.<b>StreamAggregatedResources</b>
+AggregatedDiscoveryService.<b>DeltaAggregatedResources</b></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section class="chapter" id="c8">
+  <div class="ch-head"><span class="ch-num">08</span><h2>Ordering and warming</h2><p>Names can point at things that don't exist yet. Envoy waits for some of them; for the rest, the server has to send things in the right order.</p></div>
+  <div class="steps">
+    <div class="step" data-s="1"><div class="card"><span class="k">the failure</span><h3>A route to nowhere</h3>
+      <p>A new route sends <code>/pay</code> to cluster <code>payments</code>, but the CDS update with that cluster hasn't landed yet.</p>
+      <p>Envoy doesn't reject the route. It installs it, and requests to <code>/pay</code> fail with 503 and response flag <code>NC</code>: cluster not found.</p></div></div>
+    <div class="step" data-s="2"><div class="card"><span class="k">adding</span><h3>Make before break</h3>
+      <p>The recommended order for additions is <strong>CDS → EDS → LDS → RDS</strong>. Each step only references things the previous steps created.</p>
+      <p>With ADS, the server can enforce this order on the single stream. With separate streams it has to be approximated.</p></div></div>
+    <div class="step" data-s="3"><div class="card"><span class="k">warming</span><h3>Envoy waits for some dependencies</h3>
+      <p>A new EDS cluster is <em>warming</em> until its first <code>ClusterLoadAssignment</code> arrives. A new listener is warming until its route configuration arrives. Warming resources don't take traffic.</p>
+      <p>Warming ends after <code>initial_fetch_timeout</code> (15s by default) even if nothing arrives, so a missing resource eventually fails visibly.</p>
+      <p class="note">Routes don't warm against clusters. That is why scene one breaks.</p></div></div>
+    <div class="step" data-s="4"><div class="card"><span class="k">removing</span><h3>Break in reverse</h3>
+      <p>Removal goes the other way: first stop referencing a thing, then delete it. Update routes to drop <code>/pay</code>, then remove the <code>payments</code> cluster. Its endpoints go with it.</p>
+      <p>The same rule covers both directions. A reference must never outlive, or arrive before, what it points to.</p></div></div>
+  </div>
+  <div class="stage solo" aria-label="Diagram: update ordering and warming">
+    <svg viewBox="0 0 600 400">
+      <g class="h" data-on="1">
+        <rect class="bx" x="30" y="80" width="270" height="92" rx="12"/>
+        <text class="tl" x="50" y="112">RouteConfiguration</text>
+        <text x="50" y="140">/pay → cluster: <tspan class="ta">payments</tspan></text>
+        <path class="ar bad" pathLength="1" d="M300 126 H378" marker-end="url(#m-bad)"/>
+        <rect class="bx bad" x="382" y="96" width="188" height="60" rx="10"/>
+        <text class="mid tbad" x="476" y="131">payments ?</text>
+        <text class="tl mid tbad" x="300" y="240" style="fill:var(--nack);font-size:30px">503 · NC</text>
+        <text class="mid tm" x="300" y="268">upstream cluster not found</text>
+        <circle class="pkt" r="5" style="fill:var(--nack)"><animateMotion dur="1.4s" repeatCount="indefinite" path="M60 60 H300 L376 126"/></circle>
+      </g>
+      <g class="h" data-on="2">
+        <g class="pipe">
+          <rect class="stg" x="20" y="150" width="120" height="70" rx="10"/>
+          <rect class="stg d1" x="165" y="150" width="120" height="70" rx="10"/>
+          <rect class="stg d2" x="310" y="150" width="120" height="70" rx="10"/>
+          <rect class="stg d3" x="455" y="150" width="120" height="70" rx="10"/>
+        </g>
+        <text class="tl mid" x="80" y="182">CDS</text><text class="mid ts tm" x="80" y="202">clusters</text>
+        <text class="tl mid" x="225" y="182">EDS</text><text class="mid ts tm" x="225" y="202">endpoints</text>
+        <text class="tl mid" x="370" y="182">LDS</text><text class="mid ts tm" x="370" y="202">listeners</text>
+        <text class="tl mid" x="515" y="182">RDS</text><text class="mid ts tm" x="515" y="202">routes</text>
+        <path class="lnk" d="M140 185 H162" marker-end="url(#m-mut)"/><path class="lnk" d="M285 185 H307" marker-end="url(#m-mut)"/><path class="lnk" d="M430 185 H452" marker-end="url(#m-mut)"/>
+        <text class="mid" x="300" y="120">adding: targets first, references last</text>
+        <text class="mid tm ts" x="300" y="262">each step points only at things that already exist</text>
+      </g>
+      <g class="h" data-on="3">
+        <text class="tl" x="30" y="110">Cluster payments</text>
+        <rect class="chip" x="30" y="124" width="540" height="16" rx="8"/>
+        <rect class="bar-fill" x="30" y="124" width="540" height="16" rx="8"/>
+        <text class="ts tm" x="30" y="162">warming · waiting for ClusterLoadAssignment "payments"</text>
+        <text class="tl" x="30" y="214">Listener ingress_http</text>
+        <rect class="chip" x="30" y="228" width="540" height="16" rx="8"/>
+        <rect class="bar-fill slow" x="30" y="228" width="540" height="16" rx="8"/>
+        <text class="ts tm" x="30" y="266">warming · waiting for RouteConfiguration "ingress_routes"</text>
+        <text class="ts ta" x="30" y="316">initial_fetch_timeout: 15s → then active anyway</text>
+      </g>
+      <g class="h" data-on="4">
+        <g class="pipe">
+          <rect class="stg" x="40" y="150" width="150" height="70" rx="10"/>
+          <rect class="stg d1" x="225" y="150" width="150" height="70" rx="10"/>
+          <rect class="stg d2" x="410" y="150" width="150" height="70" rx="10"/>
+        </g>
+        <text class="tl mid" x="115" y="182">RDS</text><text class="mid ts tm" x="115" y="202">drop /pay route</text>
+        <text class="tl mid" x="300" y="182">CDS</text><text class="mid ts tm" x="300" y="202">drop payments</text>
+        <text class="tl mid" x="485" y="182">EDS</text><text class="mid ts tm" x="485" y="202">endpoints go too</text>
+        <path class="lnk" d="M190 185 H222" marker-end="url(#m-mut)"/><path class="lnk" d="M375 185 H407" marker-end="url(#m-mut)"/>
+        <text class="mid" x="300" y="120">removing: references first, targets last</text>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<!-- ============ notes ============ -->
+<section class="notes" id="notes">
+  <div>
+    <span class="eyebrow">field notes</span>
+    <h2>Three sentences to keep</h2>
+    <ul class="models">
+      <li><code>version_info</code> is the state Envoy runs. <code>response_nonce</code> is the message it's answering. ACK and NACK differ only in whether the version moved.</li>
+      <li>Every request is both a reply and the next subscription. Its <code>resource_names</code> (or delta subscribe lists) are what Envoy wants right now.</li>
+      <li>Resources reference each other by name, so update order matters. Add targets before references; remove references before targets.</li>
+    </ul>
+  </div>
+  <div>
+    <div class="tbl"><table>
+      <thead><tr><th>Service</th><th>Resource · type_url suffix</th><th>Mode</th></tr></thead>
+      <tbody>
+        <tr><td>LDS</td><td>Listener<br><code>envoy.config.listener.v3.Listener</code></td><td>wildcard</td></tr>
+        <tr><td>RDS</td><td>RouteConfiguration<br><code>envoy.config.route.v3.RouteConfiguration</code></td><td>named</td></tr>
+        <tr><td>SRDS</td><td>ScopedRouteConfiguration<br><code>envoy.config.route.v3.ScopedRouteConfiguration</code></td><td>named</td></tr>
+        <tr><td>VHDS</td><td>VirtualHost<br><code>envoy.config.route.v3.VirtualHost</code></td><td>delta only</td></tr>
+        <tr><td>CDS</td><td>Cluster<br><code>envoy.config.cluster.v3.Cluster</code></td><td>wildcard</td></tr>
+        <tr><td>EDS</td><td>ClusterLoadAssignment<br><code>envoy.config.endpoint.v3.ClusterLoadAssignment</code></td><td>named</td></tr>
+        <tr><td>SDS</td><td>Secret<br><code>envoy.extensions.transport_sockets.tls.v3.Secret</code></td><td>named</td></tr>
+        <tr><td>RTDS</td><td>Runtime<br><code>envoy.service.runtime.v3.Runtime</code></td><td>named</td></tr>
+        <tr><td>ECDS</td><td>TypedExtensionConfig<br><code>envoy.config.core.v3.TypedExtensionConfig</code></td><td>named</td></tr>
+      </tbody>
+    </table></div>
+    <p style="margin-top:12px;font-size:14px;color:var(--muted)">Every type_url starts with <code>type.googleapis.com/</code>.</p>
+  </div>
+</section>
+
+<footer>
+  The authoritative text is the <a href="https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol" target="_blank" rel="noopener">xDS REST and gRPC protocol</a> page in the Envoy docs. For a working server, read <a href="https://github.com/envoyproxy/go-control-plane" target="_blank" rel="noopener">go-control-plane</a>.
+</footer>
+
+</div>
+
+<script>
+(function(){
+  const parse = s => {
+    const parts = String(s).split(/[\s,]+/).filter(Boolean);
+    return n => parts.some(p => {
+      if (p.endsWith('+')) return n >= +p.slice(0,-1);
+      if (p.includes('-')) { const [a,b] = p.split('-').map(Number); return n >= a && n <= b; }
+      return n === +p;
+    });
+  };
+  const narrow = matchMedia('(max-width:860px)').matches;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) document.querySelectorAll('svg').forEach(s => { try { s.pauseAnimations(); } catch(e){} });
+
+  const chapters = [...document.querySelectorAll('.chapter')].map(ch => {
+    const stage = ch.querySelector('.stage');
+    const els = [...stage.querySelectorAll('[data-on],[data-hl]')].map(el => ({
+      el, on: el.dataset.on ? parse(el.dataset.on) : null, hl: el.dataset.hl ? parse(el.dataset.hl) : null }));
+    const steps = [...ch.querySelectorAll('.step')];
+    const set = n => {
+      if (stage.dataset.s == n) return;
+      stage.dataset.s = n;
+      els.forEach(o => {
+        if (o.on) o.el.classList.toggle('on', o.on(n));
+        if (o.hl) o.el.classList.toggle('hl', o.hl(n));
+      });
+      steps.forEach(s => s.classList.toggle('active', +s.dataset.s === n));
+      const hlLine = stage.querySelector('.code li.hl'), box = stage.querySelector('.code');
+      if (hlLine && box) box.scrollTo({top: Math.max(0, hlLine.offsetTop - box.clientHeight / 3), behavior: reduce ? 'auto' : 'smooth'});
+    };
+    set(1);
+    steps.forEach(s => s._set = set);
+    return steps;
+  }).flat();
+
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) e.target._set(+e.target.dataset.s); });
+  }, { rootMargin: narrow ? '-66% 0px -30% 0px' : '-48% 0px -48% 0px' });
+  chapters.forEach(s => io.observe(s));
+
+  const bar = document.getElementById('prog');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const p = h.scrollTop / Math.max(1, h.scrollHeight - h.clientHeight);
+    bar.style.transform = 'scaleX(' + p.toFixed(4) + ')';
+  };
+  addEventListener('scroll', onScroll, {passive:true}); onScroll();
+})();
+</script>
+
+</body></html>

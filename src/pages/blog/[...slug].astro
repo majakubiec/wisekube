@@ -1,0 +1,74 @@
+---
+import { render } from 'astro:content';
+import Layout from '../../layouts/Layout.astro';
+import PostCard from '../../components/PostCard.astro';
+import { getPosts } from '../../lib/posts';
+import { formatDate, initials } from '../../lib/site';
+
+export async function getStaticPaths() {
+  const posts = await getPosts();
+  return posts.map((post) => ({ params: { slug: post.id }, props: { post, posts } }));
+}
+
+const { post, posts } = Astro.props;
+const { Content } = await render(post);
+const { title, description, category, author, pubDate, updatedDate, image } = post.data;
+const related = posts.filter((p) => p.id !== post.id).slice(0, 3);
+---
+
+<Layout title={title} description={description} image={image}>
+  <article>
+    <header class="relative overflow-hidden">
+      <div class="hero-gradient pb-16 pt-28">
+        <div class="container-prose text-center">
+          <a href="/blog/" class="reveal inline-flex items-center gap-1.5 text-[13px] text-soft hover:text-strong">
+            <span aria-hidden="true">&larr;</span> All posts
+          </a>
+          <div class="reveal mt-8" data-delay="1">
+            <span class="inline-block rounded bg-bg/70 px-2 py-0.5 font-mono text-[11px] uppercase tracking-wider text-muted">{category}</span>
+          </div>
+          <h1 class="reveal mt-5 text-[2.25rem] font-bold leading-[1.05] tracking-[-0.04em] text-strong md:text-[3.25rem]" data-delay="2">{title}</h1>
+          <p class="reveal mx-auto mt-5 max-w-[52ch] text-[1.1rem] leading-relaxed text-soft" data-delay="3">{description}</p>
+          <div class="reveal mt-8 flex items-center justify-center gap-3" data-delay="4">
+            <div class="flex size-9 items-center justify-center rounded-full bg-brand text-[12px] font-bold text-brand-fg" aria-hidden="true">{initials(author)}</div>
+            <div class="text-left">
+              <div class="text-[13px] font-medium text-strong">{author}</div>
+              <div class="text-[12px] text-muted">
+                <time datetime={pubDate.toISOString()}>{formatDate(pubDate)}</time>
+                {updatedDate && <span> · Updated {formatDate(updatedDate)}</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-bg to-transparent" aria-hidden="true"></div>
+    </header>
+
+    {
+      image && (
+        <div class="container-content mt-4">
+          <img src={image} alt="" class="mx-auto aspect-[2/1] w-full max-w-5xl rounded-2xl object-cover" />
+        </div>
+      )
+    }
+
+    <div class="container-prose py-14">
+      <div class="prose prose-neutral dark:prose-invert max-w-none prose-headings:tracking-[-0.025em] prose-headings:text-strong prose-a:text-strong prose-a:decoration-accent prose-a:decoration-2 prose-a:underline-offset-4 prose-code:before:content-none prose-code:after:content-none prose-pre:rounded-xl">
+        <Content />
+      </div>
+    </div>
+  </article>
+
+  {
+    related.length > 0 && (
+      <section class="border-t border-line-soft pt-16">
+        <div class="container-content">
+          <h2 class="text-[1.5rem] font-bold tracking-[-0.03em] text-strong">Keep reading</h2>
+          <div class="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {related.map((p, i) => <PostCard post={p} delay={i + 1} />)}
+          </div>
+        </div>
+      </section>
+    )
+  }
+</Layout>

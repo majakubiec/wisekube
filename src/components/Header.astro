@@ -1,0 +1,72 @@
+---
+import Logo from './Logo.astro';
+import ThemeToggle from './ThemeToggle.astro';
+import { SITE } from '../lib/site';
+
+const path = Astro.url.pathname;
+const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
+---
+
+<header class="sticky top-0 z-40 border-b border-line-soft bg-bg/85 backdrop-blur-md backdrop-saturate-150">
+  <div class="container-wide flex h-[68px] items-center justify-between">
+    <Logo />
+
+    <nav aria-label="Primary" class="hidden items-center gap-4 md:flex">
+      {
+        SITE.nav.map((item) => (
+          <a
+            href={item.href}
+            class:list={[
+              'relative rounded-lg px-3.5 py-2 text-[16px] font-medium transition-colors duration-200 hover:text-strong',
+              // Active link gets a yellow underline bar
+              isActive(item.href)
+                ? "text-strong after:absolute after:inset-x-3.5 after:-bottom-0.5 after:h-[3px] after:rounded-full after:bg-accent after:content-['']"
+                : 'text-text',
+            ]}
+            aria-current={isActive(item.href) ? 'page' : undefined}
+          >
+            {item.label}
+          </a>
+        ))
+      }
+    </nav>
+
+    <div class="flex items-center gap-2">
+      <ThemeToggle />
+      <a href="/rss.xml" class="btn btn-brand hidden sm:inline-flex">RSS</a>
+      <button
+        id="nav-toggle"
+        type="button"
+        class="inline-flex size-10 items-center justify-center rounded-lg text-strong hover:bg-elevated md:hidden"
+        aria-label="Toggle menu"
+        aria-expanded="false"
+        aria-controls="mobile-nav"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 7h16M4 12h16M4 17h16"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="mobile-nav" class="hidden border-t border-line-soft bg-bg md:hidden">
+    <nav aria-label="Primary mobile" class="container-content flex flex-col py-3">
+      {
+        SITE.nav.map((item) => (
+          <a href={item.href} class="border-b border-line-soft px-2 py-3 text-[17px] font-medium text-strong last:border-b-0">
+            {item.label}
+          </a>
+        ))
+      }
+    </nav>
+  </div>
+</header>
+
+<script>
+  const toggle = document.getElementById('nav-toggle');
+  const menu = document.getElementById('mobile-nav');
+  toggle?.addEventListener('click', () => {
+    const open = menu?.classList.toggle('hidden') === false;
+    toggle.setAttribute('aria-expanded', String(open));
+  });
+</script>

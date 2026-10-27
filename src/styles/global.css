@@ -1,0 +1,182 @@
+@import "tailwindcss";
+@import "@fontsource-variable/dm-sans";
+@plugin "@tailwindcss/typography";
+
+/* Theme is set on <html data-theme> by the inline script in Layout */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  --font-sans: "DM Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --color-bg: oklch(99% 0.006 95);
+  --color-surface: oklch(97.5% 0.01 95);
+  --color-elevated: oklch(95% 0.015 95);
+  --color-line: oklch(90% 0.012 90);
+  --color-line-soft: oklch(94% 0.01 90);
+  --color-muted: oklch(52% 0.012 80);
+  --color-soft: oklch(38% 0.01 80);
+  --color-text: oklch(20% 0.005 80);
+  --color-strong: oklch(12% 0 0);
+  --color-brand: oklch(15% 0 0);
+  --color-brand-hover: oklch(25% 0 0);
+  --color-brand-fg: oklch(90% 0.18 100);
+
+  --color-accent: oklch(88% 0.18 98);
+  --color-accent-1: oklch(93% 0.16 104);
+  --color-accent-2: oklch(87% 0.18 95);
+  --color-accent-3: oklch(80% 0.16 75);
+
+  --color-hero-1: oklch(97% 0.05 102);
+  --color-hero-2: oklch(95.5% 0.07 95);
+  --color-hero-3: oklch(96.5% 0.04 80);
+  --color-selection: oklch(90% 0.16 100);
+
+  /* Animated "kube" word: darker golds so it reads on the pale hero */
+  --color-kube-1: oklch(70% 0.16 65);
+  --color-kube-2: oklch(80% 0.17 92);
+  --color-kube-3: oklch(64% 0.15 50);
+
+  --shadow-soft: 0 1px 2px oklch(20% 0.01 300 / 0.04), 0 8px 24px -8px oklch(20% 0.01 300 / 0.12);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-bg: oklch(13% 0 0);
+  --color-surface: oklch(16% 0.004 90);
+  --color-elevated: oklch(21% 0.006 90);
+  --color-line: oklch(30% 0.008 90);
+  --color-line-soft: oklch(24% 0.006 90);
+  --color-muted: oklch(63% 0.012 90);
+  --color-soft: oklch(76% 0.01 90);
+  --color-text: oklch(88% 0.008 95);
+  --color-strong: oklch(97% 0.01 100);
+  --color-brand: oklch(87% 0.18 95);
+  --color-brand-hover: oklch(92% 0.16 100);
+  --color-brand-fg: oklch(13% 0 0);
+
+  --color-hero-1: oklch(22% 0 0);
+  --color-hero-2: oklch(17% 0 0);
+  --color-hero-3: oklch(20% 0 0);
+  --color-selection: oklch(38% 0 0);
+
+  --color-kube-1: oklch(92% 0.17 102);
+  --color-kube-2: oklch(84% 0.18 88);
+  --color-kube-3: oklch(76% 0.16 65);
+
+  --shadow-soft: 0 1px 2px oklch(0% 0 0 / 0.3), 0 8px 24px -8px oklch(0% 0 0 / 0.6);
+}
+
+@layer base {
+  html {
+    background: var(--color-bg);
+    color: var(--color-text);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Explicit color so selected code (which has its own light token colors) stays readable */
+  ::selection {
+    background: var(--color-selection);
+    color: var(--color-strong);
+  }
+}
+
+@utility container-content {
+  width: 100%;
+  max-width: 78rem;
+  margin-inline: auto;
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+@utility container-wide {
+  width: 100%;
+  max-width: 90rem;
+  margin-inline: auto;
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+@utility container-prose {
+  width: 100%;
+  max-width: 52rem;
+  margin-inline: auto;
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+@utility text-display {
+  font-size: clamp(2.5rem, 6vw, 4.75rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+@utility accent-gradient {
+  background: linear-gradient(135deg, var(--color-accent-1) 0%, var(--color-accent-2) 50%, var(--color-accent-3) 100%);
+}
+
+@utility hero-gradient {
+  background: linear-gradient(135deg, var(--color-hero-1) 0%, var(--color-hero-2) 50%, var(--color-hero-3) 100%);
+}
+
+@utility kube-gradient {
+  background: linear-gradient(90deg, var(--color-kube-1), var(--color-kube-2), var(--color-kube-3), var(--color-kube-2), var(--color-kube-1));
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: kube-shift 6s ease-in-out infinite alternate;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes kube-shift {
+  from { background-position: 0% 50%; }
+  to { background-position: 100% 50%; }
+}
+
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.1rem;
+    border-radius: 0.5rem;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s, opacity 0.2s;
+  }
+  .btn-brand {
+    background: var(--color-brand);
+    color: var(--color-brand-fg);
+  }
+  .btn-brand:hover {
+    background: var(--color-brand-hover);
+  }
+
+  /* Scroll-reveal: hidden until the observer in Layout adds .is-shown */
+  .reveal {
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 0.9s var(--ease-out-quart), transform 0.9s var(--ease-out-quart);
+  }
+  .reveal.is-shown {
+    opacity: 1;
+    transform: none;
+  }
+  .reveal[data-delay="1"] { transition-delay: 40ms; }
+  .reveal[data-delay="2"] { transition-delay: 80ms; }
+  .reveal[data-delay="3"] { transition-delay: 140ms; }
+  .reveal[data-delay="4"] { transition-delay: 200ms; }
+  .reveal[data-delay="5"] { transition-delay: 280ms; }
+  .reveal[data-delay="6"] { transition-delay: 360ms; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+  }
+}

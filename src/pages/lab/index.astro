@@ -1,0 +1,26 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import PageHero from '../../components/PageHero.astro';
+import LabCard from '../../components/LabCard.astro';
+import { getLabItems } from '../../lib/lab';
+
+const items = getLabItems();
+---
+
+<Layout title="Lab" description="Small experiments, each one a page of its own.">
+  <PageHero title="Lab" subtitle="Small experiments, each one a page of its own." />
+
+  <section class="py-12 md:py-16">
+    <div class="container-content">
+      {
+        items.length > 0 ? (
+          <div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {items.map((item, i) => <LabCard item={item} delay={(i % 6) + 1} />)}
+          </div>
+        ) : (
+          <p class="text-center text-soft">Nothing in the lab yet.</p>
+        )
+      }
+    </div>
+  </section>
+</Layout>

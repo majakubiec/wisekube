@@ -1,0 +1,30 @@
+---
+import Layout from '../layouts/Layout.astro';
+import PageHero from '../components/PageHero.astro';
+import PostCard from '../components/PostCard.astro';
+import { getPosts } from '../lib/posts';
+
+const latest = (await getPosts()).slice(0, 3);
+---
+
+<Layout>
+  <PageHero subtitle="A cube with a k. Four walls, a quiet room, and my safe place to write about tech, code and whatever else is on my mind.">
+    <Fragment slot="title">Welcome to the <span class="kube-gradient">kube</span>.</Fragment>
+    <div class="reveal mt-10 flex justify-center gap-3" data-delay="2">
+      <a href="/blog/" class="btn btn-brand">Read the blog <span aria-hidden="true">&rarr;</span></a>
+      <a href="/about/" class="btn border border-line bg-bg text-strong hover:bg-elevated">About</a>
+    </div>
+  </PageHero>
+
+  <section class="py-16 md:py-24">
+    <div class="container-content">
+      <div class="flex items-end justify-between gap-4">
+        <h2 class="text-[1.75rem] font-bold tracking-[-0.03em] text-strong">Latest posts</h2>
+        <a href="/blog/" class="text-[14px] text-soft hover:text-strong">View all &rarr;</a>
+      </div>
+      <div class="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {latest.map((post, i) => <PostCard post={post} delay={i + 1} />)}
+      </div>
+    </div>
+  </section>
+</Layout>

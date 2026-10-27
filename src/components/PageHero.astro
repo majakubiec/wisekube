@@ -1,0 +1,20 @@
+---
+interface Props {
+  // Plain-text title; pass a "title" slot instead for rich markup
+  title?: string;
+  subtitle?: string;
+}
+
+const { title, subtitle } = Astro.props;
+---
+
+<section class="relative overflow-hidden">
+  <div class="hero-gradient pb-24 pt-32">
+    <div class="container-content text-center">
+      <h1 class="reveal text-display mx-auto max-w-[16ch] text-strong"><slot name="title">{title}</slot></h1>
+      {subtitle && <p class="reveal mx-auto mt-6 max-w-[48ch] text-[1.1rem] leading-relaxed text-soft md:text-[1.2rem]" data-delay="1">{subtitle}</p>}
+      <slot />
+    </div>
+  </div>
+  <div class="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-bg to-transparent" aria-hidden="true"></div>
+</section>

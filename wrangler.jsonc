@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wisekube-blog",
+  "compatibility_date": "2026-10-27",
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "force-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "routes": [{ "pattern": "blog.wisekube.com", "custom_domain": true }]
+}

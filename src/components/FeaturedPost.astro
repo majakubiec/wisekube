@@ -1,0 +1,37 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { formatDate, initials } from '../lib/site';
+
+interface Props {
+  post: CollectionEntry<'blog'>;
+}
+
+const { post } = Astro.props;
+const { title, category, author, pubDate, image } = post.data;
+---
+
+<a
+  href={`/blog/${post.id}/`}
+  class="reveal group relative block h-[clamp(320px,40vw,420px)] overflow-hidden rounded-2xl"
+  aria-label={`Read: ${title}`}
+>
+  {
+    image ? (
+      <img src={image} alt="" loading="eager" decoding="async" class="absolute inset-0 size-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]" />
+    ) : (
+      <div class="accent-gradient absolute inset-0" />
+    )
+  }
+  <div class="absolute inset-0 bg-linear-to-t from-[oklch(10%_0.005_260/0.85)] via-[oklch(10%_0.005_260/0.4)] to-[oklch(10%_0.005_260/0.15)]" aria-hidden="true"></div>
+  <div class="absolute inset-0 flex flex-col justify-end p-8 md:p-12">
+    <span class="mb-5 inline-flex self-start rounded-full bg-white/15 px-3 py-1 text-[12px] font-medium text-white/95 backdrop-blur-sm">{category}</span>
+    <h2 class="max-w-[22ch] text-[1.6rem] font-bold leading-[1.1] tracking-[-0.035em] text-white md:text-[2.2rem] lg:text-[2.6rem]">{title}</h2>
+    <div class="mt-6 flex items-center gap-3">
+      <div class="flex size-9 items-center justify-center rounded-full bg-accent text-[12px] font-bold text-black" aria-hidden="true">{initials(author)}</div>
+      <div>
+        <div class="text-[13px] font-medium text-white/90">{author}</div>
+        <time class="text-[12px] text-white/60" datetime={pubDate.toISOString()}>{formatDate(pubDate)}</time>
+      </div>
+    </div>
+  </div>
+</a>

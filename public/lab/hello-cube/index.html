@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hello Cube</title>
+  <meta name="description" content="A spinning CSS cube. A placeholder lab experiment to test the gallery." />
+  <meta name="date" content="2026-10-27" />
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { display: grid; place-items: center; background: #111; perspective: 800px; font-family: system-ui, sans-serif; }
+    .cube { width: 160px; height: 160px; position: relative; transform-style: preserve-3d; animation: spin 8s linear infinite; }
+    .face { position: absolute; inset: 0; background: #facc15cc; border: 2px solid #111; display: grid; place-items: center; font-weight: 700; font-size: 32px; color: #111; }
+    .f1 { transform: translateZ(80px); } .f2 { transform: rotateY(180deg) translateZ(80px); }
+    .f3 { transform: rotateY(90deg) translateZ(80px); } .f4 { transform: rotateY(-90deg) translateZ(80px); }
+    .f5 { transform: rotateX(90deg) translateZ(80px); } .f6 { transform: rotateX(-90deg) translateZ(80px); }
+    @keyframes spin { to { transform: rotateX(360deg) rotateY(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="cube">
+    <div class="face f1">k</div><div class="face f2">u</div><div class="face f3">b</div>
+    <div class="face f4">e</div><div class="face f5"></div><div class="face f6"></div>
+  </div>
+</body>
+</html>
